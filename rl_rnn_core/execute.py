@@ -24,3 +24,6 @@ def predict(
     if state.ndim == len(model.input_shape):
         state = np.expand_dims(state, axis=0)
     return model.predict(state)
+
+def test():
+    return  3
