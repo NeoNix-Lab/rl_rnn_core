@@ -6,6 +6,7 @@ from .replay_buffer import ReplayBuffer
 import pandas as pd
 import time
 import os
+import numpy as np
 
 ###############  LEGENDA °°°°°°°°°°°°°°°°°
 # tau aggiorna i pesi
