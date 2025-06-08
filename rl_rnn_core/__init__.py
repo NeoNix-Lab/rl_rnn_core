@@ -5,6 +5,6 @@ if __name__ == "__main__":
 
 from .execute import train
 from .execute import predict
-from .execute import test
+from .execute import prova
 
-__all__ = ["train", "predict", "test"]
+__all__ = ["train", "predict", "prova"]

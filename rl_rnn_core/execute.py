@@ -25,5 +25,5 @@ def predict(
         state = np.expand_dims(state, axis=0)
     return model.predict(state)
 
-def test():
+def prova() -> int:
     return  3
