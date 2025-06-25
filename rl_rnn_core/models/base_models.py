@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from typing import ClassVar, Sequence, Any, Tuple, Type, TypeVar
 from ..service import db_manager as dbm
+# TODO centralizzare la gestione del db
+from auth_db_neonix.services.sqlite_service import SQLiteManager
 
 T = TypeVar("T", bound="BaseModelsClass")
 
@@ -39,6 +41,8 @@ class BaseModelsClass(ABC):
                  self.table_name,          # usato solo per segnalazioni
                  self.INSERT_QUERY)
 
+
+    @staticmethod
     @classmethod
     def convert_db_response(cls: Type[T], row: Tuple[Any, ...]) -> T:
         """Dà in pasto al costruttore id + campi, restituendo l’istanza."""

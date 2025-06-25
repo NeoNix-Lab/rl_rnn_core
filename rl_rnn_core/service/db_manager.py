@@ -1,303 +1,307 @@
+# -*- coding: utf-8 -*-
+"""
+Modulo per la gestione di database SQLite tramite la classe DBManager.
+"""
+
 import sqlite3
 import os
-import json
-from typing import List, Tuple, Union, Any
-from .config import Config
+from typing import Any, List, Tuple, Optional, Union
 
-# TODO: make it as a class in order to menage config
-config = Config()
 
-# HACK: separare i metodi aiuterebbe la notifica degli errori
-# Db base path
-DB_BASE_PATH = config.models_path
-
-def try_table_creation(tab_schema):
-     try:
-        conn = sqlite3.connect(DB_BASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(tab_schema)
-
-        conn.commit()
-
-     except sqlite3.Error as e:
-         print(f"Errore del database: {e}")
-         if conn:
-             conn.rollback()  # Annulla le modifiche in caso di errore
-
-     finally:
-         if conn:
-             conn.close()
-
-def change_db_path(db_file_path):
-    global DB_BASE_PATH
-    directory = os.path.dirname(db_file_path)
-
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
-    DB_BASE_PATH = db_file_path
-
-def retrive_all(tab_name):
-    try:
-        conn = sqlite3.connect(DB_BASE_PATH)
-        cursor = conn.cursor()
-        # Prepara la query SQL per cercare un layer con lo stesso nome e configurazione
-        query = f'''SELECT * FROM {tab_name}'''
-        cursor.execute(query)
-        all = cursor.fetchall()
-        
-        return all
-
-    except sqlite3.Error as e:
-        print(f"Errore durante il recupero di tutti gli oggetti da: {tab_name}: {e}")
-
-    finally:
-       if conn:
-           conn.close()
-
-def exists_retrieve(prop_name, val_name, tab_name, obj_values) -> List[Tuple[str, bool, Any]]:
-
+class DBManager:
     """
-    Verifica l'esistenza di uno o piu oggetti nella tabella specificata e restituisce i dettagli.
-    
-    Args:
-        prop_name (str): Nome della proprieta chiave nella tabella per il confronto.
-        val_name (str): Nome della colonna chiave nella tabella per il confronto.
-        tab_name (str): Nome della tabella in cui cercare l'oggetto.
-        obj_values (Union[str, List[str]]): Valore(i) dell'oggetto da cercare. Puo essere una stringa singola o una lista di stringhe.
-    
-    Returns:
-        List[Tuple[str, bool, Any]]: Una lista di tuple dove ogni tupla contiene il valore di obj_value analizzato,
-                                     un booleano che indica se l'oggetto esiste o non esiste nel database,
-                                     e il parametri dell'oggetto (di qualsiasi tipo) se esiste, altrimenti None.
+    Gestisce le operazioni di connessione e manipolazione di un database SQLite.
     """
 
+    def __init__(self, db_path: str):
+        """
+        Inizializza il DBManager.
 
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_BASE_PATH)
-        cursor = conn.cursor()
-        
-        if not isinstance(obj_values, list):
-            obj_values = [obj_values]  # Trasforma in lista se non lo �
-        
-        results = []
-        for obj_value in obj_values:
-            query = f'''SELECT {prop_name} FROM {tab_name} WHERE {val_name}=? LIMIT 1;'''
-            cursor.execute(query, (obj_value,))
-            result = cursor.fetchone()
-            if result:
-                results.append((obj_value, True, result[0]))  # Oggetto esistente con ID
-            else:
-                results.append((obj_value, False, None))  # Oggetto non esistente
-        return results
+        Args:
+            db_path (str): Percorso del file del database SQLite.
+        """
+        self.db_path = db_path
+        directory = os.path.dirname(db_path)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
 
-    except sqlite3.Error as e:
-        print(f"Errore durante la verifica dell esistenza degli oggetti in {tab_name}: {e}")
-        return [(obj_value, False, None) for obj_value in obj_values]  # Restituisce False e None per ogni valore in caso di errore
+    def _connect(self) -> sqlite3.Connection:
+        """
+        Crea e restituisce una nuova connessione al database.
 
-    finally:
-       if conn:
-           conn.close()
+        Returns:
+            sqlite3.Connection: Connessione al database.
+        """
+        return sqlite3.connect(self.db_path)
 
-def retive_a_list_of_recordos(val_name:str, tab_name:str, obj_values:list) -> List[any]:
+    def create_table(self, table_schema: str) -> None:
+        """
+        Esegue la creazione di una tabella usando lo schema SQL fornito.
 
-    #"""
-    #Verifica l'esistenza di uno o piu oggetti nella tabella specificata e restituisce tutti i dettagli.
-    
-    #Args:
-    #    val_name (str): Nome della colonna chiave nella tabella per il confronto.
-    #    tab_name (str): Nome della tabella in cui cercare l'oggetto.
-    #    obj_values (List[any]]): Valore(i) dell'oggetto da cercare. Puo essere una stringa singola o una lista di stringhe.
-    
-    #Returns:
-    #    List[any]: Una lista di Any dove Rappresentanti la risposta alla ricerca di uno specifico oggetto
-    #"""
+        Args:
+            table_schema (str): Comando SQL per creare la tabella (CREATE TABLE...).
 
+        Raises:
+            sqlite3.Error: Se si verifica un errore durante la creazione.
+        """
+        conn = None
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            cursor.execute(table_schema)
+            conn.commit()
+        except sqlite3.Error as e:
+            print(f"Errore in create_table: {e}")
+            if conn:
+                conn.rollback()
+            raise
+        finally:
+            if conn:
+                conn.close()
 
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_BASE_PATH)
-        cursor = conn.cursor()
-        
-        if not isinstance(obj_values, list):
-            obj_values = [obj_values]
-        
-        results = []
-        for obj_value in obj_values:
-            query = f'''SELECT * FROM {tab_name} WHERE {val_name}=?'''
-            cursor.execute(query, (obj_value,))
-            records = cursor.fetchall() 
-            for record in records:
-                results.append(record)
+    def retrieve_item(self, table: str, column: str, value: Any) -> Optional[Tuple[Any, ...]]:
+        """
+        Recupera un singolo record dalla tabella in base al valore specificato.
 
-        return results
+        Args:
+            table (str): Nome della tabella.
+            column (str): Nome della colonna per il filtro.
+            value (Any): Valore da ricercare.
 
-    except sqlite3.Error as e:
-        print(f"Errore durante il recupero degli oggetti oggetti in {tab_name}: {e}")
-        return None
+        Returns:
+            Optional[Tuple[Any, ...]]: Il record trovato o None se non esiste o in caso di errore.
+        """
+        conn = None
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            query = f"SELECT * FROM {table} WHERE {column}=? LIMIT 1;"
+            cursor.execute(query, (value,))
+            return cursor.fetchone()
+        except sqlite3.Error as e:
+            print(f"Errore in retrieve_item: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
 
-    finally:
-       if conn:
-           conn.close()
+    def retrieve_all(self, table: str) -> List[Tuple[Any, ...]]:
+        """
+        Recupera tutti i record di una tabella.
 
-# TODO: ho perso i rilanci delle eccezioni!!!!!!!!!!!!!!!!!!!
-def push(obj_list:list, tab_schema:str, query, unique_colum=None, unique_value_index=None, tabb_name=None):
-    """
-    Inserisce qualsiasi lista di oggetti sulla base di una query ed uno schema , evita inserimenti multipli se unique_colum, unique colum e tabb name sono 
-        diversi da zero
+        Args:
+            table (str): Nome della tabella.
 
-    Args:
-        unique_colum (str): Nome della propieta chiave nella tabella per il confronto di unicita
-        unique_value_index (int): Indice del valore di confronto di unicita, indice della tulpa d'inserimento.
-        tab_name (str): Nome della tabella in cui cercare l'oggetto.
-   
-    """
-    # TODO: ritorno gli elementi esistenti ma senza un associazione , in caso di liste
-    
-    try:
-        returned_objs = []
-        conn = sqlite3.connect(DB_BASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(tab_schema)
+        Returns:
+            List[Tuple[Any, ...]]: Lista di tuple, ciascuna rappresenta un record.
+        """
+        conn = None
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            query = f"SELECT * FROM {table};"
+            cursor.execute(query)
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            print(f"Errore in retrieve_all: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
 
-        for obj in obj_list:
-            if unique_colum is not None and unique_value_index is not None and tabb_name is not None:
-                check_query = f"SELECT EXISTS(SELECT 1 FROM {tabb_name} WHERE {unique_colum}=?)"
-                check_values = (obj[unique_value_index],)
-                cursor.execute(check_query, check_values)
-                exists = cursor.fetchone()[0]
+    def exists_retrieve(
+            self,
+            prop_name: str,
+            val_name: str,
+            table: str,
+            obj_values: Union[Any, List[Any]]
+    ) -> List[Tuple[Any, bool, Any]]:
+        """
+        Verifica l'esistenza di uno o più valori in una colonna e ne restituisce lo stato.
 
-                if exists == 0:
-                    try:
+        Args:
+            prop_name (str): Colonna da restituire se il record esiste.
+            val_name (str): Colonna su cui effettuare il filtro.
+            table (str): Nome della tabella.
+            obj_values (Any | List[Any]): Valore o lista di valori da verificare.
+
+        Returns:
+            List[Tuple[Any, bool, Any]]: Lista di tuple (valore, esiste, parametro) per ciascun valore.
+        """
+        conn = None
+        values = obj_values if isinstance(obj_values, list) else [obj_values]
+        results: List[Tuple[Any, bool, Any]] = []
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            for val in values:
+                query = f"SELECT {prop_name} FROM {table} WHERE {val_name}=? LIMIT 1;"
+                cursor.execute(query, (val,))
+                row = cursor.fetchone()
+                if row:
+                    results.append((val, True, row[0]))
+                else:
+                    results.append((val, False, None))
+            return results
+        except sqlite3.Error as e:
+            print(f"Errore in exists_retrieve: {e}")
+            return [(val, False, None) for val in values]
+        finally:
+            if conn:
+                conn.close()
+
+    def retrieve_list_of_records(
+            self,
+            val_name: str,
+            table: str,
+            obj_values: Union[Any, List[Any]]
+    ) -> List[Tuple[Any, ...]]:
+        """
+        Recupera tutti i record corrispondenti ai valori specificati.
+
+        Args:
+            val_name (str): Colonna su cui effettuare il filtro.
+            table (str): Nome della tabella.
+            obj_values (Any | List[Any]): Valore o lista di valori da cercare.
+
+        Returns:
+            List[Tuple[Any, ...]]: Lista di record trovati.
+        """
+        conn = None
+        values = obj_values if isinstance(obj_values, list) else [obj_values]
+        records: List[Tuple[Any, ...]] = []
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            for val in values:
+                query = f"SELECT * FROM {table} WHERE {val_name}=?;"
+                cursor.execute(query, (val,))
+                records.extend(cursor.fetchall())
+            return records
+        except sqlite3.Error as e:
+            print(f"Errore in retrieve_list_of_records: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+
+    def push(
+            self,
+            obj_list: List[Tuple[Any, ...]],
+            table_schema: str,
+            query: str,
+            unique_column: Optional[str] = None,
+            unique_value_index: Optional[int] = None,
+            table_name: Optional[str] = None
+    ) -> List[Any]:
+        """
+        Inserisce una lista di oggetti nel database, evitando duplicati se richiesto.
+
+        Args:
+            obj_list (List[Tuple[Any, ...]]): Lista di tuple di valori da inserire.
+            table_schema (str): SQL per la creazione della tabella (CREATE TABLE...).
+            query (str): SQL di inserimento (INSERT INTO...).
+            unique_column (Optional[str]): Colonna per il controllo di unicità.
+            unique_value_index (Optional[int]): Indice del valore univoco nella tupla.
+            table_name (Optional[str]): Nome della tabella in cui inserire.
+
+        Returns:
+            List[Any]: Oggetti restituiti dopo l'inserimento o quelli già esistenti.
+        """
+        conn = None
+        returned: List[Any] = []
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            # Creazione tabella
+            cursor.execute(table_schema)
+
+            for obj in obj_list:
+                if unique_column and unique_value_index is not None and table_name:
+                    # Controllo unicità
+                    check_q = f"SELECT EXISTS(SELECT 1 FROM {table_name} WHERE {unique_column}=?);"
+                    cursor.execute(check_q, (obj[unique_value_index],))
+                    exists = cursor.fetchone()[0]
+                    if not exists:
                         cursor.execute(query, obj)
-                    except ValueError as e :
-                        raise(f'@@@@@@@@@@@@@@@@@[[[[[[[[[@{e}')
-                
-                check_query_ = f"SELECT * FROM {tabb_name} WHERE {unique_colum}=?"
-                check_values_ = (obj[unique_value_index],)
-                cursor.execute(check_query_, check_values_)
-                existing_obj = cursor.fetchone()
-                returned_objs.append(existing_obj)
+                    # Recupere l'oggetto esistente o inserito
+                    sel = f"SELECT * FROM {table_name} WHERE {unique_column}=?;"
+                    cursor.execute(sel, (obj[unique_value_index],))
+                    returned.append(cursor.fetchone())
+                else:
+                    cursor.execute(query, obj)
+                    returned.append(cursor.lastrowid)
 
-            else :
-                cursor.execute(query, obj)
-            
-        conn.commit()
-        
+            conn.commit()
+            return returned
+        except sqlite3.Error as e:
+            print(f"Errore in push: {e}")
+            if conn:
+                conn.rollback()
+            return []
+        finally:
+            if conn:
+                conn.close()
 
-    except ValueError as e:
-        raise(f"Errore durante il push di : {e}")
+    def retrieve_last(
+            self,
+            table: str,
+            prop_name: str = 'id'
+    ) -> Optional[Any]:
+        """
+        Recupera il valore dell'ultima riga basato su una colonna ordinata decrescente.
 
-        if conn:
-            conn.rollback()  # Annulla le modifiche in caso di errore
+        Args:
+            table (str): Nome della tabella.
+            prop_name (str): Colonna usata per l'ordinamento (default 'id').
 
-    finally:
-        return returned_objs
-        if conn:
-            conn.close()
+        Returns:
+            Any | None: Valore dell'ultima proprietà o None.
+        """
+        conn = None
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            query = f"SELECT {prop_name} FROM {table} ORDER BY {prop_name} DESC LIMIT 1;"
+            cursor.execute(query)
+            row = cursor.fetchone()
+            return row[0] if row else None
+        except sqlite3.Error as e:
+            print(f"Errore in retrieve_last: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
 
-def retrive_last(tab_name, prop_name='id'):
-    try:
-        conn = sqlite3.connect(DB_BASE_PATH)
-        cursor = conn.cursor()
-        query = f"SELECT {prop_name} FROM {tab_name} ORDER BY id DESC LIMIT 1"
-        cursor.execute(query)
-        record  = cursor.fetchone()
+    def new_update_record(
+            self,
+            table: str,
+            updates: dict,
+            conditions: dict
+    ) -> None:
+        """
+        Aggiorna i record nella tabella secondo gli argomenti forniti.
 
-        return record
-    except ValueError as e:
-        print(f"##################################Errore durante il recupero dell ultimo di {prop_name} nella ttabella {tab_name}: {e}")
-        raise(f"Errore durante il recupero dell ultimo di {prop_name} nella ttabella {tab_name}: {e}")
-        if conn:
-            conn.rollback()  # Annulla le modifiche in caso di errore
-
-    finally:
-        if conn:
-            conn.close()
-
-#def update_record(tabb_name, prop_name, prop_value, comparation_prop_name, comparation_prop_value):
-#    try:
-#        conn = sqlite3.connect(DB_BASE_PATH)
-#        cursor = conn.cursor()
-
-        
-#        check_query = f"UPDATE {tabb_name} SET {prop_name} = {prop_value} WHERE {comparation_prop_name} = {comparation_prop_value}"
-
-#        cursor.execute(query)
-
-#        conn.commit()
-
-#    except ValueError as e:
-#        raise(f"Errore durante il push di : {e}")
-
-#        if conn:
-#            conn.rollback()  
-
-#    finally:
-#        if conn:
-#            conn.close()
-
-def push_debugger(obj_list:list, tab_schema:str, query):
-     try:
-         conn = sqlite3.connect(DB_BASE_PATH)
-         cursor = conn.cursor()
-         cursor.execute(tab_schema)
-
-         for obj in obj_list:
-                 cursor.execute(query, obj)
-         conn.commit()
-
-     except ValueError as e:
-         #print(f"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Errore durante il push di {obj_list} sull oggetto {obj} in {query}: {e}")
-         raise(f"Errore durante il push di : {e}")
-
-         if conn:
-             conn.rollback()  # Annulla le modifiche in caso di errore
-
-     finally:
-         if conn:
-             conn.close()
-
-def new_update_record(table_name: str, updates: dict, conditions: dict):
-    """
-    Aggiorna i record specificati in una tabella.
-
-    Args:
-    table_name (str): Nome della tabella in cui aggiornare il record.
-    updates (dict): Dizionario delle colonne e dei nuovi valori da aggiornare.
-    conditions (dict): Dizionario delle condizioni da rispettare per l'aggiornamento (WHERE clause).
-
-    Returns:
-    None: Aggiorna i record nel database e gestisce le eccezioni internamente.
-    """
-    # HINT: Esempio di utilizzo:
-    # update_record('nome_tabella', {'colonna_da_aggiornare': 'nuovo_valore'}, {'colonna_condizione': 'valore_condizione'})
-    try:
-        conn = sqlite3.connect(DB_BASE_PATH)
-        cursor = conn.cursor()
-
-        # Preparazione della query di aggiornamento
-        update_clause = ', '.join([f"{key} = ?" for key in updates.keys()])
-        condition_clause = ' AND '.join([f"{key} = ?" for key in conditions.keys()])
-        query = f"UPDATE {table_name} SET {update_clause} WHERE {condition_clause}"
-
-        # Preparazione dei valori per la query
-        update_values = list(updates.values())
-        condition_values = list(conditions.values())
-        query_values = update_values + condition_values
-
-        # Esecuzione della query
-        cursor.execute(query, query_values)
-        conn.commit()
-
-    except sqlite3.Error as e:
-        print(f"Errore durante l'aggiornamento del record in {table_name}: {e}")
-        if conn:
-            conn.rollback()  # Annulla le modifiche in caso di errore
-
-    finally:
-        if conn:
-            conn.close()
-
-
+        Args:
+            table (str): Nome della tabella.
+            updates (dict): Colonne e nuovi valori da aggiornare.
+            conditions (dict): Condizioni per il WHERE clause.
+        """
+        conn = None
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            update_clause = ', '.join([f"{k} = ?" for k in updates])
+            cond_clause = ' AND '.join([f"{k} = ?" for k in conditions])
+            query = f"UPDATE {table} SET {update_clause} WHERE {cond_clause};"
+            values = list(updates.values()) + list(conditions.values())
+            cursor.execute(query, values)
+            conn.commit()
+        except sqlite3.Error as e:
+            print(f"Errore in new_update_record: {e}")
+            if conn:
+                conn.rollback()
+            raise
+        finally:
+            if conn:
+                conn.close()

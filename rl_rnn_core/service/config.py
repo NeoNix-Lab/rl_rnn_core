@@ -2,6 +2,7 @@ import json
 import os
 
 #TODO: Menage db configuration for colab
+#TODO: Menage db path
 
 class Config:
     """

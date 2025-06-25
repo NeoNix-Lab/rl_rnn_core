@@ -1,5 +1,19 @@
 from .core.mod_esecutor import Trainer
 import numpy as np
+from .service.config import Config
+from .service.db_manager import retrive_item
+from .service.utils import build_static_model_from_id, build_and_test_envoirment, retrive_generic_obj
+
+#TODO manca il settaggio delle path
+config = Config()
+
+def build_model_from_trainig_id(training_id : int):
+    return  retrive_item("training", "id", training_id)
+
+def retrive(obj_type):
+    return retrive_generic_obj(obj_type, config)
+
+
 def train(
         trainer: Trainer,
         episodes: int,
@@ -27,3 +41,5 @@ def predict(
 
 def prova() -> int:
     return  3
+
+
