@@ -7,7 +7,7 @@ from .models.training_model import Training_Model
 from .service.db_manager import DBManager as dbm
 from .service.data_retriver import DataRetriever
 from typing import  Literal
-from pandas import DataFrame
+import pandas as pd
 from .core.flex_envoirment import EnvFlex
 
 MODELS = {cls.__name__: None for cls in [
@@ -138,28 +138,21 @@ def build_training_from_tr_id(id):
 
 DataSet = Literal["train_data_", "work_data_", "test_data_"]
 def build_and_test_envoirment(data: DataSet, test_action:int=1):
+    exec(MODELS["RewardFunction"].function)
 
 
-
-    exec(MODELS["RewardFunction"].funaction)
-
-    #HINT: per rendere accessibili a livello globale funzioni stringate e necessario recuperarle e reindirizzarle
     globals()["flex_buy_andSell"] = locals()['flex_buy_andSell']
     globals()["fillTab"] = locals()['fillTab']
     globals()['premia'] = locals()['premia']
+    dataset = MODELS["Dati"].data
 
-    data_set : DataFrame = DataFrame(MODELS["Dati"].data)
+    data_set: pd.DataFrame = pd.DataFrame(dataset)
 
-    action_space = DataFrame([MODELS["RewardFunction"].action_schema])
-    position_space = DataFrame([MODELS["RewardFunction"].status_schema])
+    action_space = pd.DataFrame([MODELS["RewardFunction"].action_schema]).columns
+    position_space = pd.DataFrame([MODELS["RewardFunction"].status_schema]).columns
 
-    env = EnvFlex(data_set , globals()['premia'], [], action_space, position_space, int(MODELS["Process"].window_size), MODELS["Process"].fees, [MODELS["Process"].initial_balance, 1, False)
+    env = EnvFlex(data_set, globals()['premia'], [], action_space, position_space, int(MODELS["Process"].window_size), MODELS["Process"].fees, MODELS["Process"].initial_balance, use_additional_reward_colum=False)
 
+    test_step = env.step(test_action)
 
-
-
-
-    s = env.step(test_action)
-    print(f'[[[[[[[[[[[[[[[{s[0].head(30)}]]]]]]]]]]]]]]]')
-#
-    return data_set, action_space, position_space
+    return env.Obseravtion_DataFrame

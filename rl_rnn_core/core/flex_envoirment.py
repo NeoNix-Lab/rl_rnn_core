@@ -48,41 +48,40 @@ class EnvFlex(gym.Env):
         # HINT: takes a pd.Dataframe ['Val']['MinVal]['MaxVal'] will be one hot encoded with dtype float64
         self.reward_function = reward_function
         self.SetObservation_Space()
-        self.reset()
+        #self.reset()
 
     #@abstractmethod TODO: Commentato momentaneamnete per accedere al metodo tramite la classe
     def Endcode(self, enc_list, convert_val=0):
-    
-        list_count = len(enc_list)
-    
-        dic = pd.DataFrame({})
-    
-        for i in range(len(enc_list)):
-           enco = np.zeros(list_count)
-           enco[i] = 1
-    
-           newser = pd.Series({
-               f'{enc_list[i]}' : enco})
-    
-           dic = pd.concat([dic , newser])
-    
-        # recupero il position status dal tipo di parametro
-        if  isinstance(convert_val, (int, float, np.float64, np.int64)):
-            convert_val = int(convert_val)
-            selected_array = dic.iloc[convert_val,:].to_numpy()
-            selected_name = enc_list[convert_val]
+        """
+        Restituisce un DataFrame one-hot, l'array selezionato e la label.
+
+        enc_list: lista di etichette, es. ['wait','buy','sell']
+        convert_val: indice (int) o etichetta (str)
+        """
+        n = len(enc_list)
+        # 1) DF one-hot n×n: righe 0..n-1, colonne enc_list
+        dic = pd.DataFrame(
+            data = np.eye(n, dtype=int),
+            columns = enc_list,
+            index   = range(n)
+        )
+
+        # 2) Seleziona in base al tipo di convert_val
+        if isinstance(convert_val, int):
+            idx = convert_val
+            selected_array = dic.iloc[idx].to_numpy()
+            selected_name  = enc_list[idx]
+            selected_index = idx
 
         elif isinstance(convert_val, str):
-            selected_array =  dic.loc[convert_val]
-            selected_name = np.argmax(selected_array[0])
+            selected_array = dic[convert_val].to_numpy()
+            selected_index = enc_list.index(convert_val)
+            selected_name  = convert_val
 
-        elif isinstance(convert_val, np.ndarray):
-            index = np.argmax(convert_val)
-            selected_array = dic.iloc[:, index].to_numpy()
-            selected_name = enc_list[index]
-    
-        # Ritorno lo schema one hot e la codifica testuale
-        return dic, selected_array, selected_name, np.argmax(selected_array)
+        else:
+            raise ValueError(f"Tipo non supportato: {type(convert_val)}")
+
+        return dic, selected_array, selected_name, selected_index
         
     def reset(self) :
         self.Obseravtion_DataFrame = None
@@ -98,13 +97,13 @@ class EnvFlex(gym.Env):
         # self explanatory iterato per la lunghezza della finestra
         for i in range(self.window_size):
 
-            self.Obseravtion_DataFrame.loc[self.current_step, 'step'] = self.current_step
-            self.Obseravtion_DataFrame.loc[self.current_step, 'balance'] = self.current_balance
-            self.Obseravtion_DataFrame.loc[self.current_step, 'action'] = first_action
+            self.Obseravtion_DataFrame.iloc[self.current_step, 'step'] = self.current_step
+            self.Obseravtion_DataFrame.iloc[self.current_step, 'balance'] = self.current_balance
+            self.Obseravtion_DataFrame.iloc[self.current_step, 'action'] = first_action
             self.last_action = first_action
-            self.Obseravtion_DataFrame.loc[self.current_step, 'position_status'] = first_position
+            self.Obseravtion_DataFrame.iloc[self.current_step, 'position_status'] = first_position
             self.last_position_status = first_position
-            self.Obseravtion_DataFrame.loc[self.current_step, 'reword'] = self.first_reword
+            self.Obseravtion_DataFrame.iloc[self.current_step, 'reword'] = self.first_reword
 
 
             self.current_step = self.current_step+1
@@ -171,7 +170,7 @@ class EnvFlex(gym.Env):
                     f'{self.reward_colum[i]}' : np.zeros(lengh)})
 
                 self.Obseravtion_DataFrame = pd.concat([self.Obseravtion_DataFrame, new_df], axis=1)
-        
+
 
         classic_DF = pd.DataFrame({
             'step' : np.zeros(lengh),
