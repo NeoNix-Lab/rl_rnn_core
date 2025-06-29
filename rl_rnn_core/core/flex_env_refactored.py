@@ -3,11 +3,28 @@
 Gym environment for time-series decision-making with injected reward function.
 """
 
+# TODO: definire altri stati interni come equity, pnl, trade_count
+# TODO: inizializzare pienamente tutti gli stati nello __init__
+# TODO: preferire custom Exception (NotInitializedError)
+# TODO: usare assert in step() per garantire stato valido prima dell’uso
+# TODO: aggiungere logging con modulo logging o callback specifici RL
+# TODO: inserire metriche extra (drawdown, trade_count, pnl) in info
+# TODO: implementare test unitari con pytest / unittest:
+#       - test balance property prima di reset lancia NotInitializedError
+#       - test reset() inizializza stati
+#       - test step() aggiorna balance, reward, obs corretti
+# TODO: se userai SB3/SB3, creare callback per loggare balance/position su TensorBoard
+# TODO: validare che obs restituito rispetti observation_space.contains()
+# TODO: considerare extractor o wrapper custom se in futuro aggiungi input extra al modello
+# TODO: se espandi a Dict obs space, aggiornare network input_shape o usare wrapper appropriate
+
+
 import gym
 from gym import spaces
 import numpy as np
 import pandas as pd
 from typing import Callable, List, Optional, Tuple, Dict
+import copy
 
 
 class EnvFlex(gym.Env):
@@ -25,7 +42,10 @@ class EnvFlex(gym.Env):
             window_size: int,
             reward_fn: Callable[[np.ndarray, int], float],
             action_labels: List[str],
-            feature_columns: Optional[List[str]] = None
+            status_labels: List[str],
+            fees=0,
+            initial_balance=100000,
+            additional_columns = []
     ):
         """
         Initialize the EnvFlex environment.
@@ -41,15 +61,19 @@ class EnvFlex(gym.Env):
         self.data = data.reset_index(drop=True)
         self.window_size = window_size
         self.reward_fn = reward_fn
-        self.feature_columns = feature_columns or list(self.data.columns)
 
         # Action space configured with provided labels
         self.action_labels = action_labels
         self.n_actions = len(action_labels)
         self.action_space = spaces.Discrete(self.n_actions)
 
+        # Action space configured with provided labels
+        self.status_labels = status_labels
+        self.n_status = len(status_labels)
+        self.status_space = spaces.Discrete(self.n_status)
+
         # Observation: sliding window of features
-        obs_shape = (self.window_size, len(self.feature_columns))
+        obs_shape = (self.window_size, len(self.data.columns))
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -58,6 +82,24 @@ class EnvFlex(gym.Env):
         )
 
         self.current_step: int = self.window_size
+
+        # Variabili Immutate
+        self.last_qty_both = 0
+        self.fees = fees
+        self.current_step = 0
+        self.done = False
+        self.initial_balance = initial_balance
+        self.current_balance = initial_balance
+        self.additional_columns = additional_columns
+
+        self.Obseravtion_DataFrame = self._set_df_obs()
+
+    @property
+    def current_status(self):
+        try:
+            return self.Obseravtion_DataFrame[self.current_step, "position_status"]
+        except Exception as ex:
+            raise ex
 
     def reset(self) -> np.ndarray:
         """
@@ -88,14 +130,16 @@ class EnvFlex(gym.Env):
 
         # Advance step
         self.current_step += 1
-        done = self.current_step >= len(self.data)
-        next_obs = self._get_observation() if not done else np.zeros_like(obs)
+        self.done = self.current_step >= len(self.data)
+        next_obs = self._get_observation() if not self.done else np.zeros_like(obs)
 
         info = {
             'action_label': action_label,
-            'step': self.current_step
+            'step': self.current_step,
+            'balance': self.current_balance,
+            'position status': self.current_status
         }
-        return next_obs, reward, done, info
+        return next_obs, reward, self.done, info
 
     def _get_observation(self) -> np.ndarray:
         """
@@ -106,8 +150,23 @@ class EnvFlex(gym.Env):
         """
         start = self.current_step - self.window_size
         end = self.current_step
-        window = self.data.iloc[start:end][self.feature_columns].values
+        window = self.data.iloc[start:end][self.data.columns].values
         return window.astype(np.float32)
+
+    def encode_status(self, status_label: str):
+        """
+       Map an action label to its integer index.
+
+       Args:
+           status_label (str): Label corresponding to a status.
+
+       Returns:
+           int: Status index in the status space.
+       """
+        return self.status_labels.index(status_label)
+
+    def decode_status(self, status: int):
+        return self.status_space.
 
     def encode_action(self, action_label: str) -> int:
         """
@@ -139,7 +198,7 @@ class EnvFlex(gym.Env):
             new_size (int): New number of timesteps per observation.
         """
         self.window_size = new_size
-        obs_shape = (self.window_size, len(self.feature_columns))
+        obs_shape = (self.window_size, len(self.data.columns))
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -161,3 +220,26 @@ class EnvFlex(gym.Env):
         Perform any cleanup. No-op by default.
         """
         pass
+
+    def _set_df_obs(self):
+        lenght = len(self.data.iloc[:,0])
+
+        self.Obseravtion_DataFrame = copy.deepcopy(self.data)
+
+        if len(self.additional_columns) > 0:
+            for i in range(len(self.additional_columns)):
+
+                new_df = pd.DataFrame({
+                    f'{self.additional_columns[i]}' : np.zeros(lenght)})
+
+                self.Obseravtion_DataFrame = pd.concat([self.Obseravtion_DataFrame, new_df], axis=1)
+
+
+        classic_DF = pd.DataFrame({
+            'step': np.zeros(lenght),
+            'balance': np.zeros(lenght),
+            'action': np.zeros(lenght),
+            'reword': np.zeros(lenght),
+            'position_status': np.zeros(lenght)})
+
+        return pd.concat([self.Obseravtion_DataFrame, classic_DF], axis=1)

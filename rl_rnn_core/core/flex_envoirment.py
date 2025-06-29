@@ -173,11 +173,11 @@ class EnvFlex(gym.Env):
 
 
         classic_DF = pd.DataFrame({
-            'step' : np.zeros(lengh),
+            'step': np.zeros(lengh),
             'balance': np.zeros(lengh),
-            'action' : np.zeros(lengh),
-            'reword' : np.zeros(lengh),
-            'position_status' : np.zeros(lengh)})
+            'action': np.zeros(lengh),
+            'reword': np.zeros(lengh),
+            'position_status': np.zeros(lengh)})
 
         return pd.concat([self.Obseravtion_DataFrame, classic_DF], axis=1)
 

@@ -8,7 +8,7 @@ from .service.db_manager import DBManager as dbm
 from .service.data_retriver import DataRetriever
 from typing import  Literal
 import pandas as pd
-from .core.flex_envoirment import EnvFlex
+from .core.flex_env_refactored import EnvFlex
 
 MODELS = {cls.__name__: None for cls in [
     RewardFunction, Dati, Iterazione, CustomDQNModel, Process, Layers, Training_Model
@@ -151,8 +151,9 @@ def build_and_test_envoirment(data: DataSet, test_action:int=1):
     action_space = pd.DataFrame([MODELS["RewardFunction"].action_schema]).columns
     position_space = pd.DataFrame([MODELS["RewardFunction"].status_schema]).columns
 
-    env = EnvFlex(data_set, globals()['premia'], [], action_space, position_space, int(MODELS["Process"].window_size), MODELS["Process"].fees, MODELS["Process"].initial_balance, use_additional_reward_colum=False)
+    #env = EnvFlex(data_set, globals()['premia'], [], action_space, position_space, int(MODELS["Process"].window_size), MODELS["Process"].fees, MODELS["Process"].initial_balance, use_additional_reward_colum=False)
+    env = EnvFlex(data_set, int(MODELS["Process"].window_size), globals()['flex_buy_andSell'], action_space)
 
     test_step = env.step(test_action)
 
-    return env.Obseravtion_DataFrame
+    return test_step
