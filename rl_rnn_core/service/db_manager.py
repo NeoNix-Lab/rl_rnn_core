@@ -13,7 +13,7 @@ class DBManager:
     Gestisce le operazioni di connessione e manipolazione di un database SQLite.
     """
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str = "C:\\Users\\user\\OneDrive\\Desktop\\DB\\RNN_Tuning_V01.db"):
         """
         Inizializza il DBManager.
 
@@ -33,6 +33,8 @@ class DBManager:
             sqlite3.Connection: Connessione al database.
         """
         return sqlite3.connect(self.db_path)
+
+
 
     def create_table(self, table_schema: str) -> None:
         """
@@ -78,6 +80,32 @@ class DBManager:
             query = f"SELECT * FROM {table} WHERE {column}=? LIMIT 1;"
             cursor.execute(query, (value,))
             return cursor.fetchone()
+        except sqlite3.Error as e:
+            print(f"Errore in retrieve_item: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+
+    def get_values(self, table: str, desired_colum: str, column: str, value: Any) -> Optional[Tuple[Any, ...]]:
+        """
+        Recupera un singolo record dalla tabella in base al valore specificato.
+
+        Args:
+            table (str): Nome della tabella.
+            column (str): Nome della colonna per il filtro.
+            value (Any): Valore da ricercare.
+
+        Returns:
+            Optional[Tuple[Any, ...]]: Il record trovato o None se non esiste o in caso di errore.
+        """
+        conn = None
+        try:
+            conn = self._connect()
+            cursor = conn.cursor()
+            query = f"SELECT {desired_colum} FROM {table} WHERE {column}=?;"
+            cursor.execute(query, (value,))
+            return cursor.fetchall()
         except sqlite3.Error as e:
             print(f"Errore in retrieve_item: {e}")
             return None
@@ -262,10 +290,10 @@ class DBManager:
         try:
             conn = self._connect()
             cursor = conn.cursor()
-            query = f"SELECT {prop_name} FROM {table} ORDER BY {prop_name} DESC LIMIT 1;"
+            query = f"SELECT * FROM {table} ORDER BY {prop_name} DESC LIMIT 1;"
             cursor.execute(query)
             row = cursor.fetchone()
-            return row[0] if row else None
+            return row if row else None
         except sqlite3.Error as e:
             print(f"Errore in retrieve_last: {e}")
             return None

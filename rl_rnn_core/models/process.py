@@ -1,6 +1,6 @@
 from enum import Enum
 from ..service import db_manager as dbm
-from .base_models_class import BaseModelsClass as BCM
+from .base_models import BaseModelsClass as BCM
 
 class process_type(Enum):
     """

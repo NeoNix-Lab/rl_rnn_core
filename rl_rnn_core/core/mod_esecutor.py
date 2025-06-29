@@ -1,6 +1,6 @@
 ﻿
 import tensorflow as tf
-from .model_static import CustomDQNModel as model
+from ..models.model_static import CustomDQNModel as model
 from .flex_envoirment import EnvFlex as envoirment
 from .replay_buffer import ReplayBuffer
 import pandas as pd

@@ -1,8 +1,7 @@
 import pandas as pd
 import json
 from ..service import db_manager as dbm
-from ..service.data_retriver import DataRetriver
-from ..service.config import Config
+from ..service.data_retriver import DataRetriever
 from .base_models import BaseModelsClass
 
 
@@ -41,15 +40,22 @@ class Dati(BaseModelsClass):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.df_or_colonne = self.serializza_colonne(kwargs.get("colonne"))
-        self.db_config = kwargs.get("db_config", Config())
         self._setup_data()
+
+    #@classmethod
+    #def convert_db_response(cls, row):
+    #    print("DEBUG row:", row, type(row))
+    #    keys = ("id", *cls.fields)
+    #    data = dict(zip(keys, row))
+    #    return cls(**data)
+
 
     def _setup_data(self):
         if not hasattr(self, 'name') or not self.name:
             raise ValueError("Missing 'name' attribute required for data fetching.")
 
         try:
-            retriver = DataRetriver(self.db_config)
+            retriver = DataRetriever(self.db_references)
             df = retriver.fetch_data(self.name)
             self.data = self.riduci_df_alle_colonne(df)
         except Exception as e:

@@ -42,7 +42,6 @@ class BaseModelsClass(ABC):
                  self.INSERT_QUERY)
 
 
-    @staticmethod
     @classmethod
     def convert_db_response(cls: Type[T], row: Tuple[Any, ...]) -> T:
         """Dà in pasto al costruttore id + campi, restituendo l’istanza."""

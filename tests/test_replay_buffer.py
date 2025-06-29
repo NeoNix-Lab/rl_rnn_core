@@ -1,6 +1,6 @@
 # tests/test_replay_buffer.py
 import numpy as np
-from ..core.replay_buffer import ReplayBuffer
+from rl_rnn_core.core.replay_buffer import ReplayBuffer
 
 def test_push_and_len():
     buffer = ReplayBuffer(capacity=5)

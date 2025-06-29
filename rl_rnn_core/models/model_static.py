@@ -5,6 +5,7 @@ import keras as k
 
 from ..service import db_manager as dbm
 from .base_models import BaseModelsClass as BCM
+from ..service.db_manager import DBManager
 
 
 class LayersType(Enum):
@@ -64,7 +65,7 @@ class Layers(BCM):
             raise ValueError(f"Error converting DB row to Layers: {e}")
 
 
-class CustomDQNModel(tf.keras.Model, BCM):
+class CustomDQNModel(tf.keras.Model):
     """
     Custom Deep Q-Network model using Keras.
     Supports serialization and persistence via database.
@@ -95,15 +96,14 @@ class CustomDQNModel(tf.keras.Model, BCM):
     DB_RELATION_INSERT_QUERY = '''INSERT INTO model_layer_relation (id_model, id_layer, layer_index)
                                   VALUES (?, ?, ?);'''
 
-    def __init__(self, lay_obj, input_shape, name, id='Not_Posted', push=True, **kwargs):
-        tf.keras.Model.__init__(self, name=name, **kwargs)
-        BCM.__init__(self, id=id, model=None, name=name, note='')
+    def __init__(self, lay_obj, input_shape, name, push=True, id=-1):
         self.custom_name = name
         self.window_size = input_shape
         self.lay_obj = lay_obj
         self.model_layers = []
         self.layers_id = []
         self.push = push
+        self.id = id
         self.set_up_layers(lay_obj)
 
     def build_layers(self):
@@ -136,6 +136,31 @@ class CustomDQNModel(tf.keras.Model, BCM):
         for layer in self.model_layers:
             x = layer(x)
         return x
+
+    # TODO: serve solo per evitare il crasch al print prima della build
+    def __repr__(self):
+        try:
+            return super().__repr__()
+        except Exception:
+            return f"<CustomModel name={self.custom_name} id={self.id}>"
+
+    @staticmethod
+    def convert_db_response(response, _dbm: DBManager):
+        id = response[0]
+        custom_name = response[2]
+        tulp = _dbm.get_values("model_layer_relation", "id_layer, layer_index", "id_model", id)
+        data_sorted = sorted(tulp, key=lambda tup: tup[1])
+        sorted_layers_idx = [tup[0] for tup in data_sorted]
+        list_of_layers = _dbm.retrieve_list_of_records("id", Layers.table_name, sorted_layers_idx)
+        layers_objs: [Layers] = []
+        for lay in list_of_layers:
+            layers_objs.append(Layers.convert_db_response(lay))
+
+        input_layers = [layer.layer["params"]["input_shape"][0] for layer in layers_objs if layer.type == "input"]
+
+        model = CustomDQNModel(layers_objs, input_layers[0], custom_name, False, id)
+
+        return model
 
     def set_up_layers(self, layers):
         """Ensure layers have DB IDs; push them if needed."""
@@ -191,3 +216,5 @@ class CustomDQNModel(tf.keras.Model, BCM):
         except Exception as e:
             print(f"Error generating standard Keras model: {e}")
             return None
+
+
